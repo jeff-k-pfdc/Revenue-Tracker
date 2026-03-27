@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(env|json|config|js\\)$\")",
+      "Bash(git -C /c/Users/Office/Documents/Revenue-Tracker ls-files)",
+      "Bash(npm install:*)",
+      "Bash(timeout 30 node server.js)"
+    ]
+  }
+}
