@@ -404,6 +404,7 @@ function getCustomersByDay(day, type) {
     .all(day, ...ex.params);
 }
 
+
 module.exports = {
   getDb,
   getLastSync,

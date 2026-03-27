@@ -71,6 +71,7 @@ app.post("/api/sync", async (_req, res) => {
 
 // --- Filter routes ---
 
+
 app.get("/api/filters", (_req, res) => {
   res.json({
     excluded_emails: db.getExcludedEmails(),
