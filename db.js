@@ -245,19 +245,17 @@ function getSalesByState({ from, to } = {}) {
     .all(...ex.params, ...dr.params);
 }
 
-function isShortRange(from, to) {
-  if (!from || !to) return false;
-  const a = new Date(from + "T00:00:00");
-  const b = new Date(to + "T00:00:00");
-  return (b - a) / 86400000 <= 31;
-}
+const GROUP_FORMATS = {
+  day: '%Y-%m-%d',
+  week: '%Y-W%W',
+  month: '%Y-%m',
+};
 
-function getMonthlySummary({ from, to } = {}) {
+function getMonthlySummary({ from, to, group } = {}) {
   const db = getDb();
   const ex = excludeClause("charges.customer_email");
   const dr = dateRangeClause("charges.created", from, to);
-  const daily = isShortRange(from, to);
-  const groupFmt = daily ? '%Y-%m-%d' : '%Y-%m';
+  const groupFmt = GROUP_FORMATS[group] || GROUP_FORMATS.month;
   return db
     .prepare(
       `SELECT strftime('${groupFmt}', created, 'unixepoch') as period,
@@ -271,12 +269,11 @@ function getMonthlySummary({ from, to } = {}) {
     .all(...ex.params, ...dr.params);
 }
 
-function getMonthlyRefunds({ from, to } = {}) {
+function getMonthlyRefunds({ from, to, group } = {}) {
   const db = getDb();
   const re = refundExcludeJoin();
   const dr = dateRangeClause("refunds.created", from, to);
-  const daily = isShortRange(from, to);
-  const groupFmt = daily ? '%Y-%m-%d' : '%Y-%m';
+  const groupFmt = GROUP_FORMATS[group] || GROUP_FORMATS.month;
   return db
     .prepare(
       `SELECT strftime('${groupFmt}', refunds.created, 'unixepoch') as period,
