@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Revenue Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -264,6 +265,88 @@
 
     tr.clickable { cursor: pointer; }
     tr.clickable:hover { background: #334155; }
+
+    .group-toggle {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+
+    .group-btn {
+      background: #1e293b;
+      color: #94a3b8;
+      border: none;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      border-right: 1px solid #334155;
+    }
+    .group-btn:last-child { border-right: none; }
+    .group-btn:hover { background: #334155; }
+    .group-btn.active { background: #3b82f6; color: white; }
+
+    .btn-share {
+      background: #8b5cf6;
+      color: white;
+      border: none;
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .btn-share:hover { background: #7c3aed; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.visible { display: flex; }
+
+    .modal {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .modal h3 {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    .modal .qr-block {
+      margin-bottom: 1rem;
+    }
+
+    .modal .qr-block img { border-radius: 8px; }
+
+    .modal .url-text {
+      font-size: 0.95rem;
+      color: #60a5fa;
+      word-break: break-all;
+      margin-bottom: 0.5rem;
+    }
+
+    .modal .modal-close {
+      background: #334155;
+      color: #94a3b8;
+      border: none;
+      padding: 0.4rem 1.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-top: 1rem;
+    }
+    .modal .modal-close:hover { background: #475569; }
   </style>
 </head>
 <body>
@@ -278,9 +361,15 @@
         <button class="btn-apply" onclick="applyDateRange()">Apply</button>
         <button class="btn-clear" onclick="clearDateRange()">Clear</button>
       </div>
+      <div class="group-toggle" id="group-toggle" style="display:none;">
+        <button class="group-btn active" data-group="month" onclick="setGroup('month')">Month</button>
+        <button class="group-btn" data-group="week" onclick="setGroup('week')">Week</button>
+        <button class="group-btn" data-group="day" onclick="setGroup('day')">Day</button>
+      </div>
       <div class="sync-info">
         <span id="last-sync">Loading...</span>
         <button id="sync-btn" onclick="manualSync()">Sync Now</button>
+        <button class="btn-share" onclick="showShareModal()">Share</button>
       </div>
     </div>
   </header>
@@ -349,6 +438,18 @@
 
     let monthlyChart, stateChart;
     let currentDateRange = {};
+    let currentGroup = "month";
+
+    function todayStr() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    function setGroup(g) {
+      currentGroup = g;
+      document.querySelectorAll(".group-btn").forEach((b) => b.classList.toggle("active", b.dataset.group === g));
+      loadMonthly();
+    }
 
     function dateRangeLabel() {
       if (currentDateRange.from && currentDateRange.to) return ` (${fmtDatePretty(currentDateRange.from)} — ${fmtDatePretty(currentDateRange.to)})`;
@@ -359,17 +460,14 @@
 
     function updateTitles() {
       const suffix = dateRangeLabel();
-      document.getElementById("monthly-title").textContent = "Monthly Sales vs Refunds" + suffix;
+      const groupLabel = { day: "Daily", week: "Weekly", month: "Monthly" }[currentGroup] || "Monthly";
+      document.getElementById("monthly-title").textContent = `${groupLabel} Sales vs Refunds${suffix}`;
       document.getElementById("state-title").textContent = "Sales by State (Top 10)" + suffix;
-    }
-
-    function isShortRange(from, to) {
-      if (!from || !to) return false;
-      return (new Date(to + "T00:00:00") - new Date(from + "T00:00:00")) / 86400000 <= 31;
     }
 
     // Fill all days between from and to (inclusive)
     function fillDayRange(dataPeriods, fromDate, toDate) {
+      if (!fromDate || !toDate) return dataPeriods;
       const start = new Date(fromDate + "T00:00:00");
       const end = new Date(toDate + "T00:00:00");
       const result = [];
@@ -377,6 +475,24 @@
       while (d <= end) {
         result.push(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"));
         d.setDate(d.getDate() + 1);
+      }
+      return result;
+    }
+
+    // Fill all YYYY-Www between from and to
+    function fillWeekRange(dataPeriods, fromDate, toDate) {
+      if (!fromDate || !toDate) return dataPeriods.length ? dataPeriods : [];
+      // Use the data periods directly — week numbers are tricky to generate client-side
+      // Fill gaps between min and max week labels from data
+      if (dataPeriods.length <= 1) return dataPeriods;
+      const result = [];
+      const [startY, startW] = dataPeriods[0].split("-W").map(Number);
+      const [endY, endW] = dataPeriods[dataPeriods.length - 1].split("-W").map(Number);
+      let y = startY, w = startW;
+      while (y < endY || (y === endY && w <= endW)) {
+        result.push(y + "-W" + String(w).padStart(2, "0"));
+        w++;
+        if (w > 53) { w = 1; y++; }
       }
       return result;
     }
@@ -414,24 +530,37 @@
       return result;
     }
 
-    function fillPeriodRange(dataPeriods, fromDate, toDate) {
-      if (isShortRange(fromDate, toDate)) {
-        return fillDayRange(dataPeriods, fromDate, toDate);
-      }
+    function fillPeriodRange(dataPeriods, fromDate, toDate, group) {
+      if (group === "day") return fillDayRange(dataPeriods, fromDate, toDate);
+      if (group === "week") return fillWeekRange(dataPeriods, fromDate, toDate);
       return fillMonthRange(dataPeriods, fromDate, toDate);
     }
 
-    function qs() {
+    function qs(includeGroup) {
       const p = new URLSearchParams();
       if (currentDateRange.from) p.set("from", currentDateRange.from);
       if (currentDateRange.to) p.set("to", currentDateRange.to);
+      if (includeGroup && currentGroup) p.set("group", currentGroup);
       const s = p.toString();
       return s ? "?" + s : "";
     }
 
     function applyDateRange() {
-      currentDateRange.from = document.getElementById("date-from").value || null;
-      currentDateRange.to = document.getElementById("date-to").value || null;
+      const fromVal = document.getElementById("date-from").value || null;
+      let toVal = document.getElementById("date-to").value || null;
+
+      // Auto-fill "to" as today if only "from" is set
+      if (fromVal && !toVal) {
+        toVal = todayStr();
+        document.getElementById("date-to").value = toVal;
+      }
+
+      currentDateRange.from = fromVal;
+      currentDateRange.to = toVal;
+
+      // Show grouping toggle when a date range is active
+      document.getElementById("group-toggle").style.display = currentDateRange.from ? "flex" : "none";
+
       loadAll();
     }
 
@@ -439,6 +568,9 @@
       document.getElementById("date-from").value = "";
       document.getElementById("date-to").value = "";
       currentDateRange = {};
+      currentGroup = "month";
+      document.querySelectorAll(".group-btn").forEach((b) => b.classList.toggle("active", b.dataset.group === "month"));
+      document.getElementById("group-toggle").style.display = "none";
       loadAll();
     }
 
@@ -460,12 +592,10 @@
     // --- Monthly chart with click handler ---
 
     let monthlyLabels = [];
-    let monthlyDaily = false;
     async function loadMonthly() {
-      const data = await fetch("/api/monthly" + qs()).then((r) => r.json());
-      monthlyDaily = isShortRange(currentDateRange.from, currentDateRange.to);
+      const data = await fetch("/api/monthly" + qs(true)).then((r) => r.json());
       const dataPeriods = [...new Set([...data.sales.map((s) => s.period), ...data.refunds.map((r) => r.period)])].sort();
-      const allPeriods = fillPeriodRange(dataPeriods, currentDateRange.from, currentDateRange.to);
+      const allPeriods = fillPeriodRange(dataPeriods, currentDateRange.from, currentDateRange.to, currentGroup);
       monthlyLabels = allPeriods;
       const salesMap = Object.fromEntries(data.sales.map((s) => [s.period, s.sales_cents / 100]));
       const refundMap = Object.fromEntries(data.refunds.map((r) => [r.period, r.refund_cents / 100]));
@@ -500,11 +630,10 @@
       const datasetIdx = elements[0].datasetIndex;
       const period = monthlyLabels[idx];
       const type = datasetIdx === 0 ? "sales" : "refunds";
-      if (monthlyDaily) {
-        // Daily mode — drill down for that specific day
+      if (currentGroup === "day") {
         drilldownByDay(period, type);
       } else {
-        drilldownByMonth(period, type);
+        drilldownByMonth(period.substring(0, 7), type);
       }
     }
 
@@ -694,10 +823,41 @@
       await refreshAfterFilter();
     }
 
+    // --- Share ---
+
+    async function showShareModal() {
+      const data = await fetch("/api/lan-url").then((r) => r.json());
+      const container = document.getElementById("share-qr-list");
+      if (!data.urls.length) {
+        container.innerHTML = '<p style="color:#f87171">No LAN addresses found</p>';
+      } else {
+        container.innerHTML = data.urls.map((url) => {
+          const qr = qrcode(0, "M");
+          qr.addData(url);
+          qr.make();
+          return `<div class="qr-block">${qr.createImgTag(5, 8)}<div class="url-text">${url}</div></div>`;
+        }).join("");
+      }
+      document.getElementById("share-modal").classList.add("visible");
+    }
+
+    function closeShareModal() {
+      document.getElementById("share-modal").classList.remove("visible");
+    }
+
     // --- Init ---
     loadAll();
     loadFilters();
     setInterval(loadAll, 300_000);
   </script>
+  <!-- Share modal -->
+  <div class="modal-overlay" id="share-modal" onclick="if(event.target===this)closeShareModal()">
+    <div class="modal">
+      <h3>Share Dashboard</h3>
+      <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:1rem;">Scan QR code or open the URL on any device on the same WiFi</p>
+      <div id="share-qr-list"></div>
+      <button class="modal-close" onclick="closeShareModal()">Close</button>
+    </div>
+  </div>
 </body>
 </html>

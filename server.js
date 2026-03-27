@@ -13,7 +13,11 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // --- Helper to extract date range from query params ---
 function dateRange(req) {
-  return { from: req.query.from || null, to: req.query.to || null };
+  return {
+    from: req.query.from || null,
+    to: req.query.to || null,
+    group: req.query.group || null,
+  };
 }
 
 // --- API routes ---
@@ -58,6 +62,19 @@ app.get("/api/sync-status", (_req, res) => {
     lastChargesSync: lastCharges ? new Date(lastCharges * 1000).toISOString() : null,
     lastRefundsSync: lastRefunds ? new Date(lastRefunds * 1000).toISOString() : null,
   });
+});
+
+app.get("/api/lan-url", (_req, res) => {
+  const nets = require("os").networkInterfaces();
+  const ips = [];
+  for (const iface of Object.values(nets)) {
+    for (const addr of iface) {
+      if (addr.family === "IPv4" && !addr.internal) {
+        ips.push(`http://${addr.address}:${PORT}`);
+      }
+    }
+  }
+  res.json({ urls: ips });
 });
 
 app.post("/api/sync", async (_req, res) => {
@@ -114,8 +131,19 @@ async function start() {
     console.log("Starting server anyway — data may be stale or empty.");
   }
 
-  app.listen(PORT, () => {
-    console.log(`Dashboard running at http://localhost:${PORT}`);
+  const HOST = process.env.HOST || "0.0.0.0";
+  app.listen(PORT, HOST, () => {
+    console.log(`Dashboard running at http://${HOST}:${PORT}`);
+    if (HOST === "0.0.0.0") {
+      const nets = require("os").networkInterfaces();
+      for (const iface of Object.values(nets)) {
+        for (const addr of iface) {
+          if (addr.family === "IPv4" && !addr.internal) {
+            console.log(`  LAN: http://${addr.address}:${PORT}`);
+          }
+        }
+      }
+    }
   });
 
   setInterval(async () => {
