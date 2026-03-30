@@ -16,6 +16,24 @@ function extractState(charge) {
   return { state: null, country: billing?.country || null };
 }
 
+// Cache invoice line item descriptions to avoid re-fetching
+const invoiceCache = new Map();
+
+async function getProductDesc(charge) {
+  if (charge.invoice) {
+    if (invoiceCache.has(charge.invoice)) return invoiceCache.get(charge.invoice);
+    try {
+      const inv = await stripe.invoices.retrieve(charge.invoice);
+      const desc = inv.lines.data.map((l) => l.description).filter(Boolean).join("; ");
+      invoiceCache.set(charge.invoice, desc || null);
+      return desc || null;
+    } catch {
+      return null;
+    }
+  }
+  return charge.description || null;
+}
+
 async function fetchCharges(sinceTimestamp) {
   const params = { limit: PAGE_SIZE, expand: ["data.billing_details"] };
   if (sinceTimestamp) {
@@ -28,6 +46,7 @@ async function fetchCharges(sinceTimestamp) {
 
   for await (const charge of stripe.charges.list(params)) {
     const { state, country } = extractState(charge);
+    const productDesc = await getProductDesc(charge);
     batch.push({
       id: charge.id,
       amount: charge.amount,
@@ -36,6 +55,7 @@ async function fetchCharges(sinceTimestamp) {
       state,
       country,
       email: charge.billing_details?.email || charge.receipt_email || null,
+      productDesc,
       created: charge.created,
     });
 

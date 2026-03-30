@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Internal Revenue — OpenLoop</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1917;
+      color: #e7e5e4;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #292524;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.5rem; font-weight: 600; color: #fbbf24; }
+    header .subtitle { font-size: 0.85rem; color: #a8a29e; }
+
+    .header-btns { display: flex; gap: 0.5rem; }
+
+    .nav-back, .btn-tools {
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border: none;
+    }
+    .nav-back { background: #44403c; color: #e7e5e4; }
+    .nav-back:hover { background: #57534e; }
+    .btn-tools { background: #f59e0b; color: #1c1917; font-weight: 600; }
+    .btn-tools:hover { background: #d97706; }
+
+    .section { padding: 1.5rem 2rem; }
+
+    .section h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fbbf24;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid #292524;
+      padding-bottom: 0.5rem;
+    }
+
+    .section h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #fcd34d;
+      margin: 1rem 0 0.5rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .card {
+      background: #292524;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .card .label { font-size: 0.75rem; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem; }
+    .card .sub { font-size: 0.8rem; color: #78716c; margin-top: 0.25rem; }
+    .amber { color: #fbbf24; }
+    .green { color: #4ade80; }
+    .red { color: #f87171; }
+    .sky { color: #38bdf8; }
+    .blue { color: #60a5fa; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #292524;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    th, td { padding: 0.6rem 0.75rem; text-align: left; font-size: 0.85rem; }
+
+    th {
+      background: #44403c;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #a8a29e;
+    }
+
+    th.r { text-align: right; }
+
+    tr:not(:last-child) td { border-bottom: 1px solid #44403c; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.pos { color: #4ade80; }
+    td.neg { color: #f87171; }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 800px) { .chart-row { grid-template-columns: 1fr; } }
+
+    .chart-box {
+      background: #292524;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .chart-box canvas { width: 100% !important; cursor: pointer; }
+
+    /* Side panel */
+    .panel-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+    }
+    .panel-overlay.open { display: block; }
+
+    .side-panel {
+      position: fixed;
+      top: 0;
+      right: -480px;
+      width: 460px;
+      max-width: 90vw;
+      height: 100vh;
+      background: #1c1917;
+      border-left: 1px solid #292524;
+      z-index: 201;
+      overflow-y: auto;
+      transition: right 0.25s ease;
+      padding: 1.5rem;
+    }
+    .side-panel.open { right: 0; }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    .panel-header h2 { font-size: 1.1rem; color: #fbbf24; margin: 0; border: none; padding: 0; }
+    .panel-close {
+      background: #44403c;
+      color: #a8a29e;
+      border: none;
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .panel-close:hover { background: #57534e; }
+
+    .tool-card {
+      background: #292524;
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .tool-card h3 { font-size: 0.95rem; color: #fcd34d; margin: 0 0 1rem 0; }
+    .tool-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .tool-row label { width: 120px; font-size: 0.8rem; color: #a8a29e; flex-shrink: 0; }
+    .tool-row select, .tool-row input {
+      flex: 1;
+      padding: 0.4rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid #44403c;
+      background: #1c1917;
+      color: #e7e5e4;
+      font-size: 0.85rem;
+    }
+    .tool-result { margin-top: 1rem; padding: 1rem; background: #1c1917; border-radius: 8px; }
+    .tool-result .line { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; border-bottom: 1px solid #292524; }
+    .tool-result .line:last-child { border-bottom: none; }
+    .tool-result .line .rlabel { color: #a8a29e; }
+    .tool-result .line .rvalue { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Internal Revenue Tracker</h1>
+      <div class="subtitle">OpenLoop Partnership</div>
+    </div>
+    <div class="header-btns">
+      <button class="btn-tools" onclick="togglePanel()">Tools</button>
+      <a href="/" class="nav-back">Back to Dashboard</a>
+    </div>
+  </header>
+
+  <!-- Internal Revenue Tracking -->
+  <div class="section">
+    <h2>Internal Revenue (After OL Cut)</h2>
+    <div style="display:flex;gap:1rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
+      <label style="font-size:0.8rem;color:#a8a29e;">From</label>
+      <input type="date" id="ir-from" style="padding:0.3rem 0.5rem;border-radius:6px;border:1px solid #44403c;background:#1c1917;color:#e7e5e4;font-size:0.85rem;" />
+      <label style="font-size:0.8rem;color:#a8a29e;">To</label>
+      <input type="date" id="ir-to" style="padding:0.3rem 0.5rem;border-radius:6px;border:1px solid #44403c;background:#1c1917;color:#e7e5e4;font-size:0.85rem;" />
+      <div style="display:flex;border-radius:6px;overflow:hidden;border:1px solid #44403c;">
+        <button class="ir-group-btn active" data-group="month" onclick="setIrGroup('month')" style="background:#44403c;color:#e7e5e4;border:none;padding:0.3rem 0.6rem;cursor:pointer;font-size:0.8rem;">Month</button>
+        <button class="ir-group-btn" data-group="week" onclick="setIrGroup('week')" style="background:#1c1917;color:#a8a29e;border:none;padding:0.3rem 0.6rem;cursor:pointer;font-size:0.8rem;border-left:1px solid #44403c;">Week</button>
+        <button class="ir-group-btn" data-group="day" onclick="setIrGroup('day')" style="background:#1c1917;color:#a8a29e;border:none;padding:0.3rem 0.6rem;cursor:pointer;font-size:0.8rem;border-left:1px solid #44403c;">Day</button>
+      </div>
+      <button onclick="loadInternalRevenue()" style="background:#f59e0b;color:#1c1917;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;">Apply</button>
+      <button onclick="clearIrRange()" style="background:#44403c;color:#a8a29e;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.85rem;">Clear</button>
+    </div>
+    <div class="cards" id="ir-totals"></div>
+    <div class="chart-row">
+      <div class="chart-box"><canvas id="irTimeChart"></canvas></div>
+      <div class="chart-box"><canvas id="irProductChart"></canvas></div>
+    </div>
+    <h3 style="margin-top:1rem;">With Refunds</h3>
+    <div class="chart-row">
+      <div class="chart-box"><canvas id="irTimeRefChart"></canvas></div>
+      <div class="chart-box"><canvas id="irProductRefChart"></canvas></div>
+    </div>
+    <h3>Revenue by Product</h3>
+    <table id="ir-product-table"></table>
+
+    <div id="ir-drilldown" style="display:none;margin-top:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 id="ir-drilldown-title" style="margin:0;"></h3>
+        <button onclick="document.getElementById('ir-drilldown').style.display='none'" style="background:#44403c;color:#a8a29e;border:none;padding:0.3rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.85rem;">Close</button>
+      </div>
+      <table id="ir-drilldown-table"></table>
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2>Overview</h2>
+    <div class="cards" id="summary-cards"></div>
+  </div>
+
+  <!-- Weighted break-even (ABOVE tools/costs/pricing) -->
+  <div class="section">
+    <h2>Weighted Break-Even (Live)</h2>
+    <div class="cards" id="wbe-cards"></div>
+    <div class="chart-row">
+      <div>
+        <h3>Product Weight Distribution</h3>
+        <table id="freq-table"></table>
+      </div>
+      <div class="chart-box"><canvas id="weightChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Current pricing -->
+  <div class="section">
+    <h2>Current Pricing & Revenue</h2>
+    <h3>Monthly Plans</h3>
+    <table id="current-monthly"></table>
+    <h3>3-Month Plans</h3>
+    <table id="current-3month"></table>
+    <h3>6-Month Plans</h3>
+    <table id="current-6month"></table>
+  </div>
+
+  <!-- Monthly costs -->
+  <div class="section">
+    <h2>Monthly Fixed Costs</h2>
+    <div class="chart-row">
+      <table id="costs-table"></table>
+      <div class="chart-box"><canvas id="costBreakdownChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Side panel for tools -->
+  <div class="panel-overlay" id="panel-overlay" onclick="togglePanel()"></div>
+  <div class="side-panel" id="side-panel">
+    <div class="panel-header">
+      <h2>Pricing Tools</h2>
+      <button class="panel-close" onclick="togglePanel()">Close</button>
+    </div>
+    <div class="tool-card">
+      <h3>Custom Price &rarr; Profit</h3>
+      <div class="tool-row"><label>Medication</label><select id="ptc-med"><option>Semaglutide</option><option>Tirzepatide</option></select></div>
+      <div class="tool-row"><label>Method</label><select id="ptc-method"><option>Injection</option><option>Oral</option></select></div>
+      <div class="tool-row"><label>Plan</label><select id="ptc-plan"><option value="1">1 Month</option><option value="3">3 Months</option><option value="6">6 Months</option></select></div>
+      <div class="tool-row"><label>Your Price ($)</label><input type="number" id="ptc-price" value="269" step="0.01" /></div>
+      <div class="tool-result" id="ptc-result"></div>
+    </div>
+    <div class="tool-card">
+      <h3>Target Profit &rarr; Required Price</h3>
+      <div class="tool-row"><label>Medication</label><select id="ptr-med"><option>Semaglutide</option><option>Tirzepatide</option></select></div>
+      <div class="tool-row"><label>Method</label><select id="ptr-method"><option>Injection</option><option>Oral</option></select></div>
+      <div class="tool-row"><label>Plan</label><select id="ptr-plan"><option value="1">1 Month</option><option value="3">3 Months</option><option value="6">6 Months</option></select></div>
+      <div class="tool-row"><label>Target Profit ($)</label><input type="number" id="ptr-profit" value="150" /></div>
+      <div class="tool-result" id="ptr-result"></div>
+    </div>
+  </div>
+
+  <script>
+    const fmt = (v) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtN = (v) => v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const pct = (v) => (v * 100).toFixed(1) + "%";
+
+    let DATA = null;
+    let LOOKUP = null;
+    let costOverrides = {}; // { name: { amount, enabled } }
+
+    function getActiveTotalCosts() {
+      if (!DATA) return 0;
+      let total = 0;
+      for (const c of DATA.costs) {
+        const ov = costOverrides[c.name];
+        if (ov && !ov.enabled) continue;
+        total += (ov ? ov.amount : c.amount);
+      }
+      return total;
+    }
+
+    async function init() {
+      const [data, lookup] = await Promise.all([
+        fetch("/api/internal-data").then((r) => r.json()),
+        fetch("/api/pricing-lookup").then((r) => r.json()),
+      ]);
+      DATA = data;
+      LOOKUP = lookup;
+      renderAll();
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderCosts();
+      renderCurrentPricing();
+      renderPricingTool();
+      renderLiveWeightedBE();
+      renderCostCharts();
+    }
+
+    // --- Side panel ---
+    function togglePanel() {
+      document.getElementById("panel-overlay").classList.toggle("open");
+      document.getElementById("side-panel").classList.toggle("open");
+    }
+
+    // --- Summary cards ---
+    async function renderSummary() {
+      if (!cachedWbe) cachedWbe = await fetch("/api/live-weighted-be").then((r) => r.json());
+      const wbe = cachedWbe;
+      const activeCosts = getActiveTotalCosts();
+      const unitsPerMonth = wbe.weightedRevenuePerUnit > 0 ? activeCosts / wbe.weightedRevenuePerUnit : 0;
+      const unitsPerDay = unitsPerMonth / 30;
+      const d = DATA;
+      const bestProduct = [...d.currentPricing.monthly].sort((a, b) => b.regularRevenue - a.regularRevenue)[0];
+      document.getElementById("summary-cards").innerHTML = `
+        <div class="card"><div class="label">Active Monthly Costs</div><div class="value red">${fmt(activeCosts)}</div></div>
+        <div class="card"><div class="label">Best Margin (Monthly)</div><div class="value amber">${fmt(bestProduct.regularRevenue)}</div><div class="sub">${bestProduct.product}</div></div>
+        <div class="card"><div class="label">Weighted B-E (Live)</div><div class="value sky">${fmtN(unitsPerMonth)} units/mo</div><div class="sub">${fmtN(unitsPerDay)} units/day</div></div>
+        <div class="card"><div class="label">Avg Revenue/Unit</div><div class="value green">${fmt(wbe.weightedRevenuePerUnit)}</div><div class="sub">${wbe.totalSales} sales in sample</div></div>
+      `;
+    }
+
+    // --- Current pricing ---
+    function renderCurrentPricing() {
+      const multiTable = (products) => `<thead><tr><th>Product</th><th class="r">Price</th><th class="r">OL Cost</th><th class="r">Revenue</th></tr></thead><tbody>`
+        + products.map((p) => {
+          const rev = p.regularRevenue !== undefined ? p.regularRevenue : p.revenue;
+          const price = p.regularPrice;
+          return `<tr><td>${p.product}</td><td class="num">${fmt(price)}</td><td class="num">${fmt(p.olCost)}</td><td class="num ${rev >= 0 ? 'pos' : 'neg'}">${fmt(rev)}</td></tr>`;
+        }).join("")
+        + `</tbody>`;
+
+      document.getElementById("current-monthly").innerHTML = multiTable(DATA.currentPricing.monthly);
+      document.getElementById("current-3month").innerHTML = multiTable(DATA.currentPricing.threeMonth);
+      document.getElementById("current-6month").innerHTML = multiTable(DATA.currentPricing.sixMonth);
+    }
+
+    // --- Costs (editable, sortable, with checkboxes) ---
+    function initCostOverrides() {
+      for (const c of DATA.costs) {
+        if (!costOverrides[c.name]) costOverrides[c.name] = { amount: c.amount, enabled: true };
+      }
+    }
+
+    function renderCosts() {
+      initCostOverrides();
+      // Sort most expensive first
+      const sorted = [...DATA.costs].sort((a, b) => {
+        const aAmt = costOverrides[a.name]?.amount ?? a.amount;
+        const bAmt = costOverrides[b.name]?.amount ?? b.amount;
+        return bAmt - aAmt;
+      });
+
+      const total = getActiveTotalCosts();
+      document.getElementById("costs-table").innerHTML = `
+        <thead><tr><th style="width:30px"></th><th>Expense</th><th class="r">Amount</th></tr></thead><tbody>`
+        + sorted.map((c) => {
+          const ov = costOverrides[c.name];
+          const enabled = ov ? ov.enabled : true;
+          const amt = ov ? ov.amount : c.amount;
+          const dimStyle = enabled ? "" : "opacity:0.4;text-decoration:line-through;";
+          return `<tr style="${dimStyle}">
+            <td><input type="checkbox" ${enabled ? "checked" : ""} onchange="toggleCost('${c.name.replace(/'/g, "\\'")}', this.checked)" /></td>
+            <td>${c.name}</td>
+            <td class="num"><input type="number" value="${amt}" step="1" style="width:100px;text-align:right;padding:0.2rem 0.4rem;border-radius:4px;border:1px solid #44403c;background:#1c1917;color:#e7e5e4;font-size:0.85rem;" onchange="updateCostAmount('${c.name.replace(/'/g, "\\'")}', this.value)" /></td>
+          </tr>`;
+        }).join("")
+        + `<tr style="font-weight:700;border-top:2px solid #57534e"><td></td><td>Total</td><td class="num amber">${fmt(total)}</td></tr></tbody>`;
+    }
+
+    function toggleCost(name, enabled) {
+      if (!costOverrides[name]) costOverrides[name] = { amount: DATA.costs.find(c => c.name === name)?.amount || 0, enabled: true };
+      costOverrides[name].enabled = enabled;
+      onCostsChanged();
+    }
+
+    function updateCostAmount(name, value) {
+      const amt = parseFloat(value) || 0;
+      if (!costOverrides[name]) costOverrides[name] = { amount: amt, enabled: true };
+      costOverrides[name].amount = amt;
+      onCostsChanged();
+    }
+
+    function onCostsChanged() {
+      renderCosts();
+      renderSummary();
+      renderLiveWeightedBE();
+      renderCostCharts();
+    }
+
+    // --- Pricing tool (in side panel) ---
+    function renderPricingTool() {
+      const calcCustom = () => {
+        const med = document.getElementById("ptc-med").value;
+        const method = document.getElementById("ptc-method").value;
+        const plan = document.getElementById("ptc-plan").value;
+        const customPrice = parseFloat(document.getElementById("ptc-price").value) || 0;
+        const key = `${med}|${method}|${plan}`;
+        const info = LOOKUP[key];
+        if (!info) { document.getElementById("ptc-result").innerHTML = '<div style="color:#a8a29e">No data</div>'; return; }
+        const profit = customPrice - info.olCost;
+        document.getElementById("ptc-result").innerHTML = `
+          <div class="line"><span class="rlabel">Your Price</span><span class="rvalue">${fmt(customPrice)}</span></div>
+          <div class="line"><span class="rlabel">OL Cost</span><span class="rvalue red">${fmt(info.olCost)}</span></div>
+          <div class="line"><span class="rlabel">Net Profit</span><span class="rvalue ${profit >= 0 ? 'green' : 'red'}">${fmt(profit)}</span></div>
+          <div class="line"><span class="rlabel">Profit/Month</span><span class="rvalue ${profit >= 0 ? 'amber' : 'red'}">${fmt(profit / plan)}</span></div>
+          <div class="line"><span class="rlabel">vs Current (${fmt(info.pricing)})</span><span class="rvalue ${customPrice >= info.pricing ? 'green' : 'red'}">${fmt(customPrice - info.pricing)}</span></div>
+        `;
+      };
+
+      const calcReverse = () => {
+        const med = document.getElementById("ptr-med").value;
+        const method = document.getElementById("ptr-method").value;
+        const plan = document.getElementById("ptr-plan").value;
+        const targetProfit = parseFloat(document.getElementById("ptr-profit").value) || 0;
+        const key = `${med}|${method}|${plan}`;
+        const info = LOOKUP[key];
+        if (!info) { document.getElementById("ptr-result").innerHTML = '<div style="color:#a8a29e">No data</div>'; return; }
+        const totalTargetProfit = targetProfit * plan;
+        const requiredPrice = info.olCost + totalTargetProfit;
+        document.getElementById("ptr-result").innerHTML = `
+          <div class="line"><span class="rlabel">OL Cost (${plan}mo)</span><span class="rvalue">${fmt(info.olCost)}</span></div>
+          <div class="line"><span class="rlabel">Target Profit (${plan}mo)</span><span class="rvalue green">${fmt(totalTargetProfit)}</span></div>
+          <div class="line"><span class="rlabel">Required Price</span><span class="rvalue amber">${fmt(requiredPrice)}</span></div>
+          <div class="line"><span class="rlabel">Current Price</span><span class="rvalue">${fmt(info.pricing)}</span></div>
+          <div class="line"><span class="rlabel">Difference</span><span class="rvalue ${requiredPrice <= info.pricing ? 'green' : 'red'}">${fmt(requiredPrice - info.pricing)}</span></div>
+        `;
+      };
+
+      ["ptc-med", "ptc-method", "ptc-plan"].forEach((id) => document.getElementById(id).addEventListener("change", calcCustom));
+      document.getElementById("ptc-price").addEventListener("input", calcCustom);
+      ["ptr-med", "ptr-method", "ptr-plan", "ptr-profit"].forEach((id) => document.getElementById(id).addEventListener("change", calcReverse));
+      document.getElementById("ptr-profit").addEventListener("input", calcReverse);
+
+      calcCustom();
+      calcReverse();
+    }
+
+    // --- Live Weighted Break-Even ---
+    let cachedWbe = null;
+    async function renderLiveWeightedBE() {
+      if (!cachedWbe) cachedWbe = await fetch("/api/live-weighted-be").then((r) => r.json());
+      const wbe = cachedWbe;
+      const activeCosts = getActiveTotalCosts();
+      const unitsPerMonth = wbe.weightedRevenuePerUnit > 0 ? activeCosts / wbe.weightedRevenuePerUnit : 0;
+      const unitsPerDay = unitsPerMonth / 30;
+
+      document.getElementById("wbe-cards").innerHTML = `
+        <div class="card"><div class="label">Weighted Break-Even</div><div class="value amber">${fmtN(unitsPerMonth)} units/mo</div><div class="sub">${fmtN(unitsPerDay)} units/day</div></div>
+        <div class="card"><div class="label">Avg Revenue/Unit</div><div class="value green">${fmt(wbe.weightedRevenuePerUnit)}</div></div>
+        <div class="card"><div class="label">Monthly Costs</div><div class="value red">${fmt(activeCosts)}</div></div>
+        <div class="card"><div class="label">Sales in Sample</div><div class="value sky">${wbe.totalSales}</div><div class="sub">From live Stripe data</div></div>
+      `;
+
+      document.getElementById("freq-table").innerHTML = `
+        <thead><tr><th>Product</th><th class="r">Count</th><th class="r">Weight</th><th class="r">Net/Unit</th></tr></thead><tbody>`
+        + wbe.weights.map((w) => `<tr><td>${w.product}</td><td class="num">${w.count}</td><td class="num">${pct(w.weight)}</td><td class="num ${w.netPerUnit >= 0 ? 'pos' : 'neg'}">${fmt(w.netPerUnit)}</td></tr>`).join("")
+        + `</tbody>`;
+
+      if (wbe.weights.length > 0) {
+        new Chart(document.getElementById("weightChart"), {
+          type: "bar",
+          data: {
+            labels: wbe.weights.map((w) => w.product),
+            datasets: [{ label: "Weight", data: wbe.weights.map((w) => w.weight * 100), backgroundColor: "#38bdf8" }],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: "#78716c", callback: (v) => v + "%" }, grid: { color: "#44403c" } },
+              y: { ticks: { color: "#a8a29e", font: { size: 11 } }, grid: { display: false } },
+            },
+          },
+        });
+      }
+    }
+
+    // --- Cost charts ---
+    let costChart = null;
+    function renderCostCharts() {
+      const active = DATA.costs
+        .filter(c => costOverrides[c.name]?.enabled !== false)
+        .map(c => ({ name: c.name, amount: costOverrides[c.name]?.amount ?? c.amount }))
+        .sort((a, b) => b.amount - a.amount);
+
+      const config = {
+        type: "bar",
+        data: {
+          labels: active.map((c) => c.name),
+          datasets: [{ label: "Amount", data: active.map((c) => c.amount), backgroundColor: "#f59e0b" }],
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#78716c", callback: (v) => "$" + v.toLocaleString() }, grid: { color: "#44403c" } },
+            y: { ticks: { color: "#a8a29e", font: { size: 11 } }, grid: { display: false } },
+          },
+        },
+      };
+
+      if (costChart) { costChart.data = config.data; costChart.update(); }
+      else { costChart = new Chart(document.getElementById("costBreakdownChart"), config); }
+    }
+
+    // --- Internal Revenue Tracking ---
+    let irGroup = "month";
+    let irTimeChart = null, irProductChart = null;
+    let irPeriodLabels = [];
+
+    function todayStr() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    function setIrGroup(g) {
+      irGroup = g;
+      document.querySelectorAll(".ir-group-btn").forEach((b) => {
+        const active = b.dataset.group === g;
+        b.style.background = active ? "#44403c" : "#1c1917";
+        b.style.color = active ? "#e7e5e4" : "#a8a29e";
+      });
+      loadInternalRevenue();
+    }
+
+    function clearIrRange() {
+      document.getElementById("ir-from").value = "";
+      document.getElementById("ir-to").value = "";
+      loadInternalRevenue();
+    }
+
+    function irQs() {
+      const p = new URLSearchParams();
+      let from = document.getElementById("ir-from").value;
+      let to = document.getElementById("ir-to").value;
+      if (from && !to) { to = todayStr(); document.getElementById("ir-to").value = to; }
+      if (from) p.set("from", from);
+      if (to) p.set("to", to);
+      p.set("group", irGroup);
+      return "?" + p.toString();
+    }
+
+    let irTimeRefChart = null, irProductRefChart = null;
+
+    async function loadInternalRevenue() {
+      const [revData, prodData] = await Promise.all([
+        fetch("/api/internal-revenue" + irQs()).then((r) => r.json()),
+        fetch("/api/internal-by-product" + irQs()).then((r) => r.json()),
+      ]);
+
+      const t = revData.totals;
+      document.getElementById("ir-totals").innerHTML = `
+        <div class="card"><div class="label">Gross Revenue</div><div class="value green">${fmt(t.gross / 100)}</div><div class="sub">${t.count} sales</div></div>
+        <div class="card"><div class="label">OpenLoop Cut</div><div class="value red">${fmt(t.olCost / 100)}</div></div>
+        <div class="card"><div class="label">Profit (Before Refunds)</div><div class="value blue">${fmt(t.netBeforeRefunds / 100)}</div></div>
+        <div class="card"><div class="label">Refunds</div><div class="value red">${fmt(t.refunds / 100)}</div></div>
+        <div class="card"><div class="label">Net Profit</div><div class="value blue">${fmt(t.net / 100)}</div><div class="sub">Revenue - OL - Refunds</div></div>
+      `;
+
+      const periods = revData.periods;
+      irPeriodLabels = periods.map((p) => p.period);
+      const chartOpts = (title, click) => ({
+        responsive: true,
+        onClick: click || undefined,
+        plugins: { title: { display: true, text: title, color: "#a8a29e" }, legend: { labels: { color: "#a8a29e" } } },
+        scales: {
+          x: { ticks: { color: "#78716c" }, grid: { color: "#292524" } },
+          y: { ticks: { color: "#78716c", callback: (v) => "$" + v.toLocaleString() }, grid: { color: "#44403c" } },
+        },
+      });
+      const chartOptsH = (title) => ({
+        indexAxis: "y",
+        responsive: true,
+        plugins: { title: { display: true, text: title, color: "#a8a29e" }, legend: { labels: { color: "#a8a29e" } } },
+        scales: {
+          x: { ticks: { color: "#78716c", callback: (v) => "$" + v.toLocaleString() }, grid: { color: "#44403c" } },
+          y: { ticks: { color: "#a8a29e", font: { size: 11 } }, grid: { display: false } },
+        },
+      });
+
+      // TOP charts: Revenue, OL Cost, Net (NO refunds)
+      const timeConfig = {
+        type: "bar",
+        data: {
+          labels: irPeriodLabels,
+          datasets: [
+            { label: "Revenue", data: periods.map((p) => p.gross / 100), backgroundColor: "#4ade80" },
+            { label: "OL Cost", data: periods.map((p) => p.olCost / 100), backgroundColor: "#f87171" },
+            { label: "Profit", data: periods.map((p) => p.netBeforeRefunds / 100), backgroundColor: "#60a5fa" },
+          ],
+        },
+        options: chartOpts("Revenue Over Time (Before Refunds)", handleIrChartClick),
+      };
+
+      if (irTimeChart) { irTimeChart.data = timeConfig.data; irTimeChart.update(); }
+      else { irTimeChart = new Chart(document.getElementById("irTimeChart"), timeConfig); }
+
+      const mapped = prodData.filter((p) => p.product !== "Unmapped");
+      const prodConfig = {
+        type: "bar",
+        data: {
+          labels: mapped.map((p) => p.product),
+          datasets: [
+            { label: "Revenue", data: mapped.map((p) => p.gross / 100), backgroundColor: "#4ade80" },
+            { label: "OL Cost", data: mapped.map((p) => p.olCost / 100), backgroundColor: "#f87171" },
+            { label: "Profit", data: mapped.map((p) => (p.gross - p.olCost) / 100), backgroundColor: "#60a5fa" },
+
+          ],
+        },
+        options: chartOptsH("By Product (Before Refunds)"),
+      };
+
+      if (irProductChart) { irProductChart.data = prodConfig.data; irProductChart.update(); }
+      else { irProductChart = new Chart(document.getElementById("irProductChart"), prodConfig); }
+
+      // BOTTOM charts: Revenue, OL Cost, Refunds, Net Profit (WITH refunds)
+      const timeRefConfig = {
+        type: "bar",
+        data: {
+          labels: irPeriodLabels,
+          datasets: [
+            { label: "Revenue", data: periods.map((p) => p.gross / 100), backgroundColor: "#4ade80" },
+            { label: "OL Cost", data: periods.map((p) => p.olCost / 100), backgroundColor: "#f87171" },
+            { label: "Refunds", data: periods.map((p) => p.refunds / 100), backgroundColor: "#fbbf24" },
+            { label: "Net Profit", data: periods.map((p) => p.net / 100), backgroundColor: "#60a5fa" },
+          ],
+        },
+        options: chartOpts("Revenue Over Time (After Refunds)", handleIrChartClick),
+      };
+
+      if (irTimeRefChart) { irTimeRefChart.data = timeRefConfig.data; irTimeRefChart.update(); }
+      else { irTimeRefChart = new Chart(document.getElementById("irTimeRefChart"), timeRefConfig); }
+
+      const prodRefConfig = {
+        type: "bar",
+        data: {
+          labels: mapped.map((p) => p.product),
+          datasets: [
+            { label: "Revenue", data: mapped.map((p) => p.gross / 100), backgroundColor: "#4ade80" },
+            { label: "OL Cost", data: mapped.map((p) => p.olCost / 100), backgroundColor: "#f87171" },
+            { label: "Refunds", data: mapped.map((p) => p.refunds / 100), backgroundColor: "#fbbf24" },
+            { label: "Net Profit", data: mapped.map((p) => p.net / 100), backgroundColor: "#60a5fa" },
+          ],
+        },
+        options: chartOptsH("By Product (After Refunds)"),
+      };
+
+      if (irProductRefChart) { irProductRefChart.data = prodRefConfig.data; irProductRefChart.update(); }
+      else { irProductRefChart = new Chart(document.getElementById("irProductRefChart"), prodRefConfig); }
+
+      // Product table
+      document.getElementById("ir-product-table").innerHTML = `
+        <thead><tr><th>Product</th><th>Sales</th><th class="r">Revenue</th><th class="r">OL Cost</th><th class="r">Refunds</th><th class="r">Net Profit</th><th class="r">Avg / Sale</th></tr></thead><tbody>`
+        + prodData.map((p) => `<tr>
+          <td>${p.product}</td>
+          <td>${p.count}</td>
+          <td class="num green">${fmt(p.gross / 100)}</td>
+          <td class="num red">${fmt(p.olCost / 100)}</td>
+          <td class="num red">${fmt(p.refunds / 100)}</td>
+          <td class="num ${p.net >= 0 ? 'blue' : 'neg'}">${fmt(p.net / 100)}</td>
+          <td class="num">${p.count ? fmt(p.net / p.count / 100) : "-"}</td>
+        </tr>`).join("")
+        + `</tbody>`;
+    }
+
+    // --- Chart click -> drilldown ---
+    function handleIrChartClick(event, elements) {
+      if (!elements.length) return;
+      const idx = elements[0].index;
+      const period = irPeriodLabels[idx];
+      if (period) loadIrDrilldown(period);
+    }
+
+    async function loadIrDrilldown(period) {
+      const p = new URLSearchParams();
+      p.set("period", period);
+      p.set("group", irGroup);
+      let from = document.getElementById("ir-from").value;
+      let to = document.getElementById("ir-to").value;
+      if (from) p.set("from", from);
+      if (to) p.set("to", to);
+
+      const data = await fetch("/api/internal-drilldown?" + p.toString()).then((r) => r.json());
+      const panel = document.getElementById("ir-drilldown");
+      document.getElementById("ir-drilldown-title").textContent = "Transactions — " + period;
+
+      const sales = data.filter(r => r.type === "sale");
+      const refunds = data.filter(r => r.type === "refund");
+
+      let html = `<thead><tr><th>Type</th><th>Email</th><th class="r">Date</th><th class="r">Amount</th><th class="r">OL Cost</th><th class="r">Net</th></tr></thead><tbody>`;
+
+      if (sales.length) {
+        html += `<tr><td colspan="6" style="background:#1a2e1a;color:#4ade80;font-weight:600;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;padding:0.5rem 0.75rem;">Sales (${sales.length})</td></tr>`;
+        for (const r of sales) {
+          const date = new Date(r.date * 1000).toLocaleDateString("en-US");
+          const net = r.amount - r.olCost;
+          html += `<tr>
+            <td><span style="color:#4ade80;font-weight:600">SALE</span></td>
+            <td>${r.email}</td>
+            <td class="num">${date}</td>
+            <td class="num green">${fmt(r.amount / 100)}</td>
+            <td class="num red">${fmt(r.olCost / 100)}</td>
+            <td class="num blue">${fmt(net / 100)}</td>
+          </tr>`;
+        }
+      }
+
+      if (refunds.length) {
+        html += `<tr><td colspan="6" style="background:#2a1515;color:#f87171;font-weight:600;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;padding:0.5rem 0.75rem;">Refunds (${refunds.length})</td></tr>`;
+        for (const r of refunds) {
+          const date = new Date(r.date * 1000).toLocaleDateString("en-US");
+          html += `<tr style="background:#1f1515">
+            <td><span style="color:#f87171;font-weight:600">REFUND</span></td>
+            <td>${r.email}</td>
+            <td class="num">${date}</td>
+            <td class="num red">-${fmt(r.amount / 100)}</td>
+            <td class="num">—</td>
+            <td class="num red">-${fmt(r.amount / 100)}</td>
+          </tr>`;
+        }
+      }
+
+      html += `</tbody>`;
+      document.getElementById("ir-drilldown-table").innerHTML = html;
+
+      panel.style.display = "block";
+      panel.scrollIntoView({ behavior: "smooth" });
+    }
+
+    init();
+    loadInternalRevenue();
+  </script>
+</body>
+</html>
