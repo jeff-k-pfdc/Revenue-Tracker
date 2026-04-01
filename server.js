@@ -3,6 +3,7 @@ const express = require("express");
 const path = require("path");
 const db = require("./db");
 const { sync } = require("./sync");
+const { parseExcel, buildPricingLookup } = require("./excel");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -118,6 +119,44 @@ app.delete("/api/filters/keyword", (req, res) => {
   const { keyword } = req.body;
   if (!keyword) return res.status(400).json({ error: "keyword required" });
   res.json(db.removeExcludedKeyword(keyword));
+});
+
+// --- Internal / OpenLoop routes ---
+
+app.get("/api/internal-data", (_req, res) => {
+  try {
+    const data = parseExcel();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to parse Excel: " + err.message });
+  }
+});
+
+app.get("/api/internal-revenue", (req, res) => {
+  const range = dateRange(req);
+  res.json(db.getInternalRevenueSummary(range));
+});
+
+app.get("/api/internal-by-product", (req, res) => {
+  res.json(db.getInternalByProduct(dateRange(req)));
+});
+
+app.get("/api/internal-drilldown", (req, res) => {
+  const { period, group } = req.query;
+  if (!period) return res.status(400).json({ error: "period required" });
+  res.json(db.getInternalDrilldown(period, group || "month", dateRange(req)));
+});
+
+app.get("/api/live-weighted-be", (req, res) => {
+  res.json(db.getLiveWeightedBreakEven(dateRange(req)));
+});
+
+app.get("/api/pricing-lookup", (_req, res) => {
+  try {
+    res.json(buildPricingLookup());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- Startup ---
