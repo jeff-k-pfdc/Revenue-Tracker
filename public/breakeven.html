@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Break-Even Float Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eaeaf0;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #2d2d44;
+    }
+
+    header h1 { font-size: 1.5rem; font-weight: 600; color: #fbbf24; }
+    header .sub { font-size: 0.85rem; color: #9ca3af; margin-top: 0.15rem; }
+
+    .nav-back {
+      background: #2d2d44;
+      color: #eaeaf0;
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.85rem;
+    }
+    .nav-back:hover { background: #3d3d5c; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      min-height: calc(100vh - 72px);
+    }
+
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+    .controls {
+      background: #22223a;
+      border-right: 1px solid #2d2d44;
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+
+    .controls h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #fbbf24;
+      margin-bottom: 1rem;
+    }
+
+    .control-group { margin-bottom: 1rem; }
+
+    .control-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: #c4c4d4;
+      margin-bottom: 0.3rem;
+    }
+
+    .control-group input[type="number"] {
+      width: 100%;
+      padding: 0.45rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #3d3d5c;
+      background: #16162b;
+      color: #eaeaf0;
+      font-size: 0.9rem;
+    }
+
+    .control-hint {
+      font-size: 0.72rem;
+      color: #8888a0;
+      margin-top: 0.15rem;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #2d2d44;
+      margin: 1rem 0;
+    }
+
+    .group-box {
+      background: #2a2418;
+      border: 1px solid #4a3a20;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .group-box .group-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #d4a54a;
+      margin-bottom: 0.75rem;
+    }
+
+    .group-box .control-group:last-child { margin-bottom: 0; }
+
+    .expandable {
+      background: #1c1c34;
+      border: 1px solid #3d3d5c;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-top: 0.5rem;
+    }
+
+
+    .ltv-row {
+      display: grid;
+      grid-template-columns: 50px 1fr 1fr 1fr 22px;
+      gap: 0.35rem;
+      align-items: center;
+      margin-bottom: 0.35rem;
+    }
+
+    .ltv-row .ltv-label {
+      font-size: 0.78rem;
+      color: #9ca3af;
+    }
+
+    .ltv-row input {
+      padding: 0.35rem 0.5rem;
+      border-radius: 5px;
+      border: 1px solid #3d3d5c;
+      background: #16162b;
+      color: #eaeaf0;
+      font-size: 0.85rem;
+      width: 100%;
+    }
+
+    .ltv-row .remove-ltv {
+      background: none;
+      border: none;
+      color: #f87171;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0 0.25rem;
+    }
+    .ltv-row .remove-ltv:hover { color: #ef4444; }
+
+    .ltv-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .ltv-actions button {
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .btn-add { background: #3d3d5c; color: #c4c4d4; }
+    .btn-add:hover { background: #4d4d6a; }
+    .btn-save { background: #fbbf24; color: #1a1a2e; font-weight: 600; }
+    .btn-save:hover { background: #f59e0b; }
+
+    /* Metrics */
+    .metrics-bar {
+      display: flex;
+      gap: 0.75rem;
+      padding: 1rem 2rem;
+      overflow-x: auto;
+      flex-wrap: wrap;
+    }
+
+    .metric {
+      background: #22223a;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      min-width: 130px;
+      flex: 1;
+    }
+
+    .metric .m-label {
+      font-size: 0.68rem;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .metric .m-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-top: 0.1rem;
+    }
+
+    .amber { color: #f59e0b; }
+    .green { color: #4ade80; }
+    .red { color: #f87171; }
+    .sky { color: #38bdf8; }
+
+    .chart-area {
+      padding: 0 2rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .chart-box {
+      background: #22223a;
+      border-radius: 10px;
+      padding: 1.25rem;
+      flex: 1;
+    }
+
+    .chart-box canvas { width: 100% !important; }
+
+    .chart-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e0e0ee;
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Break-Even Float Calculator</h1>
+      <div class="sub">Model cash flow assumptions and find your break-even point</div>
+    </div>
+    <a href="/" class="nav-back">Back to Dashboard</a>
+  </header>
+
+  <div class="layout">
+    <div class="controls">
+      <h2>Assumptions</h2>
+
+      <!-- Acquisition -->
+      <div class="group-box">
+        <div class="group-title">Acquisition</div>
+        <div class="control-group">
+          <label>CPA ($)</label>
+          <input type="number" id="cpa" value="300" min="0" step="1" oninput="updateAcquisition('cpa')">
+          <div class="control-hint">Cost to acquire one customer</div>
+        </div>
+        <div class="control-group">
+          <label>New Initials Per Month</label>
+          <input type="number" id="customers" value="30" min="1" step="1" oninput="updateAcquisition('customers')">
+          <div class="control-hint">Projected monthly new customers</div>
+        </div>
+        <div class="control-group">
+          <label style="color:#8585cc;">Monthly Acquisition Spend ($)</label>
+          <input type="number" id="acq-spend" value="9000" min="0" step="100" oninput="updateAcquisition('spend')" style="background:#3a3a52;color:#8585cc;">
+          <div class="control-hint">CPA × Initials — edit to adjust initials</div>
+        </div>
+      </div>
+
+      <!-- Revenue (LTV) -->
+      <div class="group-box">
+        <div class="group-title">Revenue</div>
+        <div id="ltv-btn-summary" style="font-size:0.75rem;color:#9ca3af;margin-bottom:0.5rem;"></div>
+
+        <div style="display:grid;grid-template-columns:50px 1fr 1fr 1fr 22px;gap:0.35rem;margin-bottom:0.5rem;">
+          <span></span>
+          <span style="font-size:0.8rem;color:#c4c4d4;text-align:center;font-weight:600;">Rev ($)</span>
+          <span style="font-size:0.8rem;color:#c4c4d4;text-align:center;font-weight:600;">Rebill Rel. %</span>
+          <span style="font-size:0.8rem;color:#8585cc;text-align:center;font-weight:600;">Rebill Abs. %</span>
+          <span></span>
+        </div>
+
+        <div id="ltv-rows"></div>
+
+        <div style="display:flex;gap:0.4rem;margin-top:0.5rem;">
+          <button class="btn-add" onclick="addLtvRow()">+ Add</button>
+        </div>
+
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #4a3a20;">
+          <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#c4c4d4;">
+            <input type="checkbox" id="ltv-repeat" onchange="liveUpdate()" style="width:auto;">
+            Repeat last row indefinitely
+          </label>
+        </div>
+      </div>
+
+      <!-- Costs -->
+      <div class="group-box">
+        <div class="group-title">Costs</div>
+        <div class="control-group">
+          <label>OpenLoop Cost Per Sale ($)</label>
+          <input type="number" id="ol-cost" value="0" min="0" step="1" oninput="calculate()">
+          <div class="control-hint">Set to 0 if not applicable</div>
+        </div>
+        <div class="control-group">
+          <label>Monthly Fixed Costs ($)</label>
+          <input type="number" id="fixed" value="0" min="0" step="100" oninput="calculate()">
+          <div class="control-hint">Rent, salaries, software, ads, etc.</div>
+        </div>
+        <div class="control-group">
+          <label style="display:flex;align-items:center;gap:0.5rem;">
+            <input type="checkbox" id="scale-enabled" onchange="toggleScale()" style="width:auto;">
+            Scale Spend Monthly
+          </label>
+          <div class="control-hint">Increase fixed costs each month</div>
+        </div>
+        <div id="scale-fields" style="display:none;" class="expandable">
+          <div class="control-group">
+            <label>Start Month</label>
+            <input type="number" id="scale-start" value="1" min="1" step="1" oninput="calculate()">
+            <div class="control-hint">Month when scaling begins (e.g. 12 = M12)</div>
+          </div>
+          <div class="control-group">
+            <label>Monthly Increase ($)</label>
+            <input type="number" id="scale-amount" value="2000" min="0" step="100" oninput="calculate()">
+            <div class="control-hint">Amount added each month after start</div>
+          </div>
+          <div class="control-group" style="margin-bottom:0;">
+            <label>Spend Cap ($)</label>
+            <input type="number" id="scale-cap" value="80000" min="0" step="1000" oninput="calculate()">
+            <div class="control-hint">Max fixed costs will not exceed this</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time -->
+      <div class="group-box">
+        <div class="group-title">Projection</div>
+        <div class="control-group">
+          <label>Time Horizon (months)</label>
+          <input type="number" id="months" value="6" min="3" max="260" step="1" oninput="calculate()">
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;">
+      <div class="metrics-bar" id="metrics"></div>
+      <div class="chart-area">
+        <div class="chart-box">
+          <div class="chart-title">Cumulative Cash Flow</div>
+          <canvas id="cashFlowChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">Monthly Breakdown</div>
+          <canvas id="monthlyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script>
+    const fmt = (v) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    let cashFlowChart = null;
+    let monthlyChart = null;
+
+    // LTV schedule: array of { revenue, retention }
+    // retention = % of ORIGINAL cohort still paying (not from previous month)
+    let ltvSchedule = [
+      { revenue: 250, retention: 100 },
+      { revenue: 250, retention: 70 },
+      { revenue: 250, retention: 50 },
+    ];
+
+    // --- Acquisition spend sync ---
+    function updateAcquisition(source) {
+      const cpaEl = document.getElementById("cpa");
+      const custEl = document.getElementById("customers");
+      const spendEl = document.getElementById("acq-spend");
+      const cpa = parseFloat(cpaEl.value) || 0;
+      const cust = parseInt(custEl.value) || 1;
+      const spend = parseFloat(spendEl.value) || 0;
+
+      if (source === "spend") {
+        // Edit spend -> update initials
+        if (cpa > 0) custEl.value = Math.round(spend / cpa);
+      } else {
+        // Edit CPA or customers -> update spend
+        spendEl.value = Math.round(cpa * (parseInt(custEl.value) || 1));
+      }
+      calculate();
+    }
+
+    function toggleScale() {
+      document.getElementById("scale-fields").style.display = document.getElementById("scale-enabled").checked ? "block" : "none";
+      calculate();
+    }
+
+    // --- LTV helpers ---
+    // Get "from previous" retention for row i
+    function getFromPrev(i) {
+      if (i === 0) return 100;
+      const prev = ltvSchedule[i - 1].retention;
+      if (prev === 0) return 0;
+      return Math.round((ltvSchedule[i].retention / prev) * 100);
+    }
+
+    // Update "from initial" based on "from previous" edit
+    function setFromPrev(idx, fromPrevPct) {
+      const prevRetention = idx > 0 ? ltvSchedule[idx - 1].retention : 100;
+      ltvSchedule[idx].retention = Math.round(prevRetention * fromPrevPct / 100);
+      // Cascade: recalculate all subsequent rows' fromInitial if they were relative
+      renderLtvRows();
+    }
+
+    function renderLtvRows() {
+      const container = document.getElementById("ltv-rows");
+      container.innerHTML = ltvSchedule.map((entry, i) => {
+        const fromPrev = getFromPrev(i);
+        const label = i === 0 ? "Initial" : "R" + i;
+        return `
+        <div class="ltv-row">
+          <span class="ltv-label">${label}</span>
+          <input type="number" value="${entry.revenue}" min="0" step="1" data-idx="${i}" data-field="revenue" oninput="updateLtvRevenue(this)">
+          <input type="number" value="${fromPrev}" min="0" max="100" step="1" data-idx="${i}" data-field="fromPrev" oninput="updateLtvFromPrev(this)" ${i === 0 ? "disabled style='opacity:0.5'" : ""}>
+          <input type="number" value="${entry.retention}" min="0" max="100" step="1" data-idx="${i}" data-field="fromInitial" oninput="updateLtvFromInitial(this)" ${i === 0 ? "disabled style='opacity:0.5'" : ""} style="background:#3a3a52;color:#8585cc;">
+          <button class="remove-ltv" onclick="removeLtvRow(${i})" ${ltvSchedule.length <= 1 ? "disabled style='opacity:0.3'" : ""}>&times;</button>
+        </div>`;
+      }).join("");
+    }
+
+    function updateLtvRevenue(el) {
+      const idx = parseInt(el.dataset.idx);
+      ltvSchedule[idx].revenue = parseFloat(el.value) || 0;
+      liveUpdate();
+    }
+
+    function updateLtvFromInitial(el) {
+      const idx = parseInt(el.dataset.idx);
+      ltvSchedule[idx].retention = parseFloat(el.value) || 0;
+      // Update rebill relative in same row
+      const row = el.closest(".ltv-row");
+      const prevInput = row.querySelector('[data-field="fromPrev"]');
+      if (prevInput) prevInput.value = getFromPrev(idx);
+      // Update next row's rebill relative
+      updateNextRowPrev(row, idx);
+      liveUpdate();
+    }
+
+    function updateLtvFromPrev(el) {
+      const idx = parseInt(el.dataset.idx);
+      const fromPrevPct = parseFloat(el.value) || 0;
+      const prevRetention = idx > 0 ? ltvSchedule[idx - 1].retention : 100;
+      ltvSchedule[idx].retention = Math.round(prevRetention * fromPrevPct / 100);
+      // Update rebill absolute in same row
+      const row = el.closest(".ltv-row");
+      const absInput = row.querySelector('[data-field="fromInitial"]');
+      if (absInput) absInput.value = ltvSchedule[idx].retention;
+      // Update next row's rebill relative
+      updateNextRowPrev(row, idx);
+      liveUpdate();
+    }
+
+    function updateNextRowPrev(row, idx) {
+      const nextRow = row.nextElementSibling;
+      if (nextRow && nextRow.classList.contains("ltv-row")) {
+        const nextIdx = idx + 1;
+        if (nextIdx < ltvSchedule.length) {
+          const nextPrev = nextRow.querySelector('[data-field="fromPrev"]');
+          if (nextPrev) nextPrev.value = getFromPrev(nextIdx);
+        }
+      }
+    }
+
+    function liveUpdate() {
+      updateLtvSummary();
+      calculate();
+    }
+
+    function addLtvRow() {
+      const last = ltvSchedule[ltvSchedule.length - 1];
+      const fromPrev = ltvSchedule.length >= 2 ? getFromPrev(ltvSchedule.length - 1) : 80;
+      const newRetention = Math.round(last.retention * fromPrev / 100);
+      ltvSchedule.push({ revenue: last.revenue, retention: Math.max(newRetention, 0) });
+      renderLtvRows();
+    }
+
+    function removeLtvRow(idx) {
+      if (ltvSchedule.length <= 1) return;
+      ltvSchedule.splice(idx, 1);
+      renderLtvRows();
+    }
+
+    function updateLtvSummary() {
+      const repeatOn = document.getElementById("ltv-repeat").checked;
+      const finiteLtv = ltvSchedule.reduce((s, e) => s + e.revenue * (e.retention / 100), 0);
+      const label = repeatOn ? `${ltvSchedule.length} rows + repeating, ~${fmt(Math.round(finiteLtv))}+ LTV` : `${ltvSchedule.length} rows, ~${fmt(Math.round(finiteLtv))} LTV`;
+      document.getElementById("ltv-btn-summary").textContent = label;
+    }
+
+    // Get effective LTV entry for a given age (0-indexed month)
+    function getLtvEntry(age) {
+      if (age < ltvSchedule.length) return ltvSchedule[age];
+      const repeatOn = document.getElementById("ltv-repeat").checked;
+      if (!repeatOn) return null;
+      return ltvSchedule[ltvSchedule.length - 1];
+    }
+
+    function getInputs() {
+      const scaleEnabled = document.getElementById("scale-enabled").checked;
+      const olCost = parseFloat(document.getElementById("ol-cost").value) || 0;
+      return {
+        cpa: parseFloat(document.getElementById("cpa").value) || 0,
+        fixed: parseFloat(document.getElementById("fixed").value) || 0,
+        olCost,
+        olEnabled: olCost > 0,
+        customers: parseInt(document.getElementById("customers").value) || 1,
+        periods: parseInt(document.getElementById("months").value) || 12,
+        scaleEnabled,
+        scaleStart: scaleEnabled ? (parseInt(document.getElementById("scale-start").value) || 1) : 1,
+        scaleAmount: scaleEnabled ? (parseFloat(document.getElementById("scale-amount").value) || 0) : 0,
+        scaleCap: scaleEnabled ? (parseFloat(document.getElementById("scale-cap").value) || Infinity) : Infinity,
+      };
+    }
+
+    function calculate() {
+      const { cpa, fixed, olCost, olEnabled, customers, periods, scaleStart, scaleAmount, scaleCap } = getInputs();
+
+      // Calculate total expected LTV (finite part)
+      // OL cost is deducted per payment — each month a customer pays, OL takes a flat cut
+      const totalLtv = ltvSchedule.reduce((s, e) => s + e.revenue * (e.retention / 100), 0);
+      const totalOlPerCustomer = olEnabled ? ltvSchedule.reduce((s, e) => s + olCost * (e.retention / 100), 0) : 0;
+      const netLtv = totalLtv - totalOlPerCustomer;
+
+      const labels = [];
+      const cumCashFlow = [];
+      const periodRevenue = [];
+      const periodCosts = [];
+
+      let cumulative = 0;
+      let breakEvenPeriod = null;
+      const cohorts = [];
+
+      for (let p = 1; p <= periods; p++) {
+        labels.push("M" + p);
+        cohorts.push({ month: p });
+
+        let rev = 0;
+        for (const cohort of cohorts) {
+          const age = p - cohort.month;
+          const entry = getLtvEntry(age);
+          if (entry) {
+            const retainPct = entry.retention / 100;
+            const grossRev = entry.revenue * retainPct * customers;
+            const olDeduction = olEnabled ? olCost * retainPct * customers : 0;
+            rev += grossRev - olDeduction;
+          }
+        }
+
+        // Costs
+        const scaleMonths = p >= scaleStart ? p - scaleStart : 0;
+        let currentFixed = fixed + (scaleAmount * scaleMonths);
+        if (currentFixed > scaleCap) currentFixed = scaleCap;
+        const cost = currentFixed + (customers * cpa);
+
+        cumulative += rev - cost;
+        periodRevenue.push(rev);
+        periodCosts.push(cost);
+        cumCashFlow.push(cumulative);
+
+        if (breakEvenPeriod === null && cumulative >= 0 && p > 1) breakEvenPeriod = p;
+      }
+
+      if (breakEvenPeriod === null && cumCashFlow.length > 0 && cumCashFlow[0] >= 0) breakEvenPeriod = 1;
+
+      // If we didn't break even within the horizon, extend the simulation to find it (up to 600 months)
+      if (breakEvenPeriod === null) {
+        let extCum = cumulative;
+        const extCohorts = [...cohorts];
+        for (let p = periods + 1; p <= 600; p++) {
+          extCohorts.push({ month: p });
+          let rev = 0;
+          for (const cohort of extCohorts) {
+            const age = p - cohort.month;
+            const entry = getLtvEntry(age);
+            if (entry) {
+              const retainPct = entry.retention / 100;
+              const grossRev = entry.revenue * retainPct * customers;
+              const olDeduction = olEnabled ? olCost * retainPct * customers : 0;
+              rev += grossRev - olDeduction;
+            }
+          }
+          const sm = p >= scaleStart ? p - scaleStart : 0;
+          let cf = fixed + (scaleAmount * sm);
+          if (cf > scaleCap) cf = scaleCap;
+          extCum += rev - (cf + customers * cpa);
+          if (extCum >= 0) { breakEvenPeriod = p; break; }
+        }
+      }
+
+      const lowestCash = Math.min(...cumCashFlow);
+      const monthlyCostTotal = fixed + (customers * cpa);
+      const breakEvenLabel = breakEvenPeriod ? ("M" + breakEvenPeriod) : "Never";
+      const endCum = cumCashFlow.length > 0 ? cumCashFlow[cumCashFlow.length - 1] : 0;
+
+      // Metrics
+      let metricsHtml = `
+        <div class="metric"><div class="m-label">Break-Even</div><div class="m-value ${breakEvenPeriod ? 'green' : 'red'}">${breakEvenLabel}</div></div>
+        <div class="metric"><div class="m-label">Max Cash Burn</div><div class="m-value red">${fmt(Math.round(lowestCash))}</div></div>
+        <div class="metric"><div class="m-label">Monthly Cost (M1)</div><div class="m-value amber">${fmt(monthlyCostTotal)}</div></div>
+        <div class="metric"><div class="m-label">Gross LTV/Cust</div><div class="m-value sky">${fmt(Math.round(totalLtv))}</div></div>`;
+      if (olEnabled) {
+        metricsHtml += `
+        <div class="metric"><div class="m-label">OL Cost/Cust</div><div class="m-value red">${fmt(Math.round(totalOlPerCustomer))}</div></div>
+        <div class="metric"><div class="m-label">Net LTV/Cust</div><div class="m-value green">${fmt(Math.round(netLtv))}</div></div>`;
+      }
+      metricsHtml += `
+        <div class="metric"><div class="m-label">Cumulative M${periods}</div><div class="m-value ${endCum >= 0 ? 'green' : 'red'}">${fmt(Math.round(endCum))}</div></div>
+        <div class="metric"><div class="m-label">Customer ROI</div><div class="m-value ${netLtv > cpa ? 'green' : 'red'}">${cpa > 0 ? ((netLtv / cpa) * 100 - 100).toFixed(0) + "%" : "---"}</div></div>`;
+      document.getElementById("metrics").innerHTML = metricsHtml;
+
+      // Cumulative cash flow chart
+      const cfConfig = {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Cumulative Cash Flow",
+              data: cumCashFlow.map(v => Math.round(v)),
+              borderColor: "#f59e0b",
+              backgroundColor: "rgba(245, 158, 11, 0.1)",
+              fill: true,
+              tension: 0.3,
+              pointRadius: periods > 52 ? 0 : 2,
+              pointHoverRadius: 5,
+            },
+            {
+              label: "Break-Even Line",
+              data: Array(periods).fill(0),
+              borderColor: "#4d4d6a",
+              borderDash: [6, 4],
+              pointRadius: 0,
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: { labels: { color: "#c4c4d4" } },
+            tooltip: { callbacks: { label: (ctx) => ctx.dataset.label === "Break-Even Line" ? null : ctx.dataset.label + ": " + fmt(ctx.raw) } },
+          },
+          scales: {
+            x: { ticks: { color: "#9ca3af" }, grid: { color: "#2d2d44" } },
+            y: { ticks: { color: "#9ca3af", callback: (v) => fmt(v) }, grid: { color: (ctx) => ctx.tick.value === 0 ? "#4d4d6a" : "#2d2d44" } },
+          },
+        },
+      };
+
+      if (cashFlowChart) { cashFlowChart.data = cfConfig.data; cashFlowChart.update(); }
+      else { cashFlowChart = new Chart(document.getElementById("cashFlowChart"), cfConfig); }
+
+      // Breakdown chart
+      const bdConfig = {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Revenue", data: periodRevenue.map(v => Math.round(v)), backgroundColor: "#4ade80" },
+            { label: "Costs", data: periodCosts.map(v => Math.round(v)), backgroundColor: "#f87171" },
+          ],
+        },
+        options: {
+          responsive: true,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: { labels: { color: "#c4c4d4" } },
+            tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ": " + fmt(ctx.raw) } },
+          },
+          scales: {
+            x: { ticks: { color: "#9ca3af" }, grid: { color: "#2d2d44" } },
+            y: { ticks: { color: "#9ca3af", callback: (v) => fmt(v) }, grid: { color: "#2d2d44" } },
+          },
+        },
+      };
+
+      if (monthlyChart) { monthlyChart.data = bdConfig.data; monthlyChart.update(); }
+      else { monthlyChart = new Chart(document.getElementById("monthlyChart"), bdConfig); }
+    }
+
+    renderLtvRows();
+    updateLtvSummary();
+    calculate();
+  </script>
+</body>
+</html>
