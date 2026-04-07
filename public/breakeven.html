@@ -234,7 +234,10 @@
       <h1>Break-Even Float Calculator</h1>
       <div class="sub">Model cash flow assumptions and find your break-even point</div>
     </div>
-    <a href="/" class="nav-back">Back to Dashboard</a>
+    <div style="display:flex;gap:0.75rem;align-items:center;">
+      <button id="cohort-toggle-btn" onclick="toggleCohortSection()" style="background:#3d3d5c;color:#eaeaf0;border:none;padding:0.4rem 1rem;border-radius:6px;font-size:0.85rem;cursor:pointer;">Cohort Tracker</button>
+      <a href="/" class="nav-back">Back to Dashboard</a>
+    </div>
   </header>
 
   <div class="layout">
@@ -339,6 +342,43 @@
 
     <div style="flex:1;overflow-y:auto;">
       <div class="metrics-bar" id="metrics"></div>
+
+      <!-- Cohort Tracker Section -->
+      <div id="cohort-section" style="display:none;padding:0 2rem 1.5rem;">
+        <div style="border-top:1px solid #2d2d44;padding-top:1.5rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:1rem;">
+            <div>
+              <h2 style="color:#fbbf24;font-size:1rem;font-weight:600;">Cohort Tracker</h2>
+              <div style="font-size:0.78rem;color:#9ca3af;margin-top:0.15rem;">Fixed group of customers — no new acquisitions each month</div>
+            </div>
+            <div style="display:flex;gap:1.5rem;align-items:flex-end;flex-wrap:wrap;">
+              <div>
+                <label style="font-size:0.78rem;color:#c4c4d4;display:block;margin-bottom:0.3rem;">Starting Customers</label>
+                <input type="number" id="cohort-size" value="100" min="1" step="1" oninput="runCohortTracker()" style="padding:0.4rem 0.6rem;border-radius:6px;border:1px solid #3d3d5c;background:#16162b;color:#eaeaf0;font-size:0.9rem;width:130px;">
+              </div>
+              <div style="font-size:0.82rem;color:#9ca3af;padding-bottom:0.35rem;" id="cohort-acq-label"></div>
+              <div style="font-size:0.82rem;font-weight:600;padding-bottom:0.35rem;" id="cohort-be-label"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+            <div class="chart-box">
+              <div class="chart-title">Cohort Cumulative Cash Flow</div>
+              <canvas id="cohort-chart"></canvas>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">Active Customers & Revenue per Month</div>
+              <canvas id="cohort-breakdown-chart"></canvas>
+            </div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.84rem;">
+              <thead id="cohort-thead"></thead>
+              <tbody id="cohort-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="chart-area">
         <div class="chart-box">
           <div class="chart-title">Cumulative Cash Flow</div>
@@ -351,7 +391,6 @@
       </div>
     </div>
   </div>
-
 
   <script>
     const fmt = (v) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -478,12 +517,14 @@
       const newRetention = Math.round(last.retention * fromPrev / 100);
       ltvSchedule.push({ revenue: last.revenue, retention: Math.max(newRetention, 0) });
       renderLtvRows();
+      liveUpdate();
     }
 
     function removeLtvRow(idx) {
       if (ltvSchedule.length <= 1) return;
       ltvSchedule.splice(idx, 1);
       renderLtvRows();
+      liveUpdate();
     }
 
     function updateLtvSummary() {
@@ -498,7 +539,14 @@
       if (age < ltvSchedule.length) return ltvSchedule[age];
       const repeatOn = document.getElementById("ltv-repeat").checked;
       if (!repeatOn) return null;
-      return ltvSchedule[ltvSchedule.length - 1];
+      // Apply the last row's relative % as a compounding decay each extra month
+      const lastIdx = ltvSchedule.length - 1;
+      const lastEntry = ltvSchedule[lastIdx];
+      const lastRelPct = getFromPrev(lastIdx) / 100;
+      const extraMonths = age - lastIdx;
+      const decayedRetention = lastEntry.retention * Math.pow(lastRelPct, extraMonths);
+      if (decayedRetention < 0.01) return null; // effectively zero, stop iterating
+      return { revenue: lastEntry.revenue, retention: decayedRetention };
     }
 
     function getInputs() {
@@ -683,11 +731,146 @@
 
       if (monthlyChart) { monthlyChart.data = bdConfig.data; monthlyChart.update(); }
       else { monthlyChart = new Chart(document.getElementById("monthlyChart"), bdConfig); }
+
+      if (document.getElementById("cohort-section").style.display !== "none") runCohortTracker();
     }
 
     renderLtvRows();
     updateLtvSummary();
     calculate();
+
+    // --- Cohort Tracker ---
+    let cohortChart = null;
+    let cohortBreakdownChart = null;
+
+    function toggleCohortSection() {
+      const section = document.getElementById("cohort-section");
+      const btn = document.getElementById("cohort-toggle-btn");
+      const visible = section.style.display !== "none";
+      section.style.display = visible ? "none" : "block";
+      btn.style.background = visible ? "#3d3d5c" : "#fbbf24";
+      btn.style.color = visible ? "#eaeaf0" : "#1a1a2e";
+      if (!visible) runCohortTracker();
+    }
+
+    function runCohortTracker() {
+      const startingCustomers = parseInt(document.getElementById("cohort-size").value) || 100;
+      const { cpa, fixed, olCost, olEnabled, periods, scaleStart, scaleAmount, scaleCap } = getInputs();
+      const maxMonths = periods;
+
+      const acquisitionCost = startingCustomers * cpa;
+      let cumulative = -acquisitionCost;
+
+      const rows = [];
+      for (let age = 0; age < maxMonths; age++) {
+        const entry = getLtvEntry(age);
+        if (!entry) break;
+        const month = age + 1;
+        const retainPct = entry.retention / 100;
+        const activeCustomers = startingCustomers * retainPct;
+        const revenue = entry.revenue * retainPct * startingCustomers;
+        const olDed = olEnabled ? olCost * retainPct * startingCustomers : 0;
+        const netRevenue = revenue - olDed;
+        const sm = month >= scaleStart ? month - scaleStart : 0;
+        let fixedCost = fixed + scaleAmount * sm;
+        if (fixedCost > scaleCap) fixedCost = scaleCap;
+        const periodNet = netRevenue - fixedCost;
+        cumulative += periodNet;
+        rows.push({
+          month, activeCustomers: Math.round(activeCustomers),
+          revenue: Math.round(revenue), olDed: Math.round(olDed),
+          netRevenue: Math.round(netRevenue), fixedCost: Math.round(fixedCost),
+          periodNet: Math.round(periodNet), cumulative: Math.round(cumulative),
+        });
+      }
+
+      const beRow = rows.find(r => r.cumulative >= 0);
+      document.getElementById("cohort-acq-label").textContent =
+        `Upfront cost: ${fmt(acquisitionCost)} (${startingCustomers.toLocaleString()} × ${fmt(cpa)} CPA)`;
+      const beEl = document.getElementById("cohort-be-label");
+      beEl.textContent = beRow ? `Break-even: M${beRow.month}` : "No break-even within horizon";
+      beEl.style.color = beRow ? "#4ade80" : "#f87171";
+
+      // Table header
+      const thStyle = "padding:0.5rem 0.75rem;text-align:right;color:#9ca3af;font-weight:500;border-bottom:1px solid #3d3d5c;white-space:nowrap;";
+      const thStyleL = "padding:0.5rem 0.75rem;text-align:left;color:#9ca3af;font-weight:500;border-bottom:1px solid #3d3d5c;";
+      document.getElementById("cohort-thead").innerHTML = `<tr>
+        <th style="${thStyleL}">Month</th>
+        <th style="${thStyle}">Active</th>
+        <th style="${thStyle}">Revenue</th>
+        ${olEnabled ? `<th style="${thStyle}">OL Cost</th>` : ""}
+        <th style="${thStyle}">Net Rev</th>
+        ${fixed > 0 ? `<th style="${thStyle}">Fixed Cost</th>` : ""}
+        <th style="${thStyle}">Period Net</th>
+        <th style="${thStyle}">Cumulative</th>
+      </tr>`;
+
+      const tdR = (v, cls) => `<td style="padding:0.45rem 0.75rem;text-align:right;${cls ? `color:${cls};` : ""}">${v}</td>`;
+      const tdL = (v) => `<td style="padding:0.45rem 0.75rem;color:#9ca3af;">${v}</td>`;
+      document.getElementById("cohort-tbody").innerHTML = rows.map((r, i) => `
+        <tr style="${i % 2 === 0 ? "background:#22223a;" : ""}">
+          ${tdL("M" + r.month)}
+          ${tdR(r.activeCustomers.toLocaleString())}
+          ${tdR(fmt(r.revenue))}
+          ${olEnabled ? tdR(fmt(r.olDed), "#f87171") : ""}
+          ${tdR(fmt(r.netRevenue))}
+          ${fixed > 0 ? tdR(fmt(r.fixedCost), "#f87171") : ""}
+          ${tdR(fmt(r.periodNet), r.periodNet >= 0 ? "#4ade80" : "#f87171")}
+          ${tdR(fmt(r.cumulative), r.cumulative >= 0 ? "#4ade80" : "#f87171")}
+        </tr>`).join("");
+
+      // Chart
+      const chartData = {
+        labels: rows.map(r => "M" + r.month),
+        datasets: [
+          {
+            label: "Cumulative Cash Flow",
+            data: rows.map(r => r.cumulative),
+            borderColor: "#f59e0b", backgroundColor: "rgba(245,158,11,0.1)",
+            fill: true, tension: 0.3, pointRadius: rows.length > 24 ? 0 : 3,
+          },
+          {
+            label: "Break-Even Line",
+            data: Array(rows.length).fill(0),
+            borderColor: "#4d4d6a", borderDash: [6, 4], pointRadius: 0, borderWidth: 1,
+          },
+        ],
+      };
+      const chartOpts = {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: "#c4c4d4" } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label === "Break-Even Line" ? null : ctx.dataset.label + ": " + fmt(ctx.raw) } },
+        },
+        scales: {
+          x: { ticks: { color: "#9ca3af" }, grid: { color: "#2d2d44" } },
+          y: { ticks: { color: "#9ca3af", callback: v => fmt(v) }, grid: { color: "#2d2d44" } },
+        },
+      };
+
+      if (cohortChart) { cohortChart.data = chartData; cohortChart.update(); }
+      else { cohortChart = new Chart(document.getElementById("cohort-chart"), { type: "line", data: chartData, options: chartOpts }); }
+
+      // Breakdown chart: active customers (left axis) + revenue (right axis)
+      const bdData = {
+        labels: rows.map(r => "M" + r.month),
+        datasets: [
+          { label: "Revenue", data: rows.map(r => r.revenue), backgroundColor: "rgba(74,222,128,0.7)", type: "bar", yAxisID: "yRev" },
+          { label: "Active Customers", data: rows.map(r => r.activeCustomers), borderColor: "#38bdf8", backgroundColor: "transparent", type: "line", tension: 0.3, pointRadius: rows.length > 24 ? 0 : 3, yAxisID: "yCust" },
+        ],
+      };
+      const bdOpts = {
+        responsive: true,
+        plugins: { legend: { labels: { color: "#c4c4d4" } }, tooltip: { mode: "index" } },
+        scales: {
+          x: { ticks: { color: "#9ca3af" }, grid: { color: "#2d2d44" } },
+          yRev: { position: "left", ticks: { color: "#9ca3af", callback: v => fmt(v) }, grid: { color: "#2d2d44" } },
+          yCust: { position: "right", ticks: { color: "#38bdf8" }, grid: { drawOnChartArea: false } },
+        },
+      };
+      if (cohortBreakdownChart) { cohortBreakdownChart.data = bdData; cohortBreakdownChart.update(); }
+      else { cohortBreakdownChart = new Chart(document.getElementById("cohort-breakdown-chart"), { type: "bar", data: bdData, options: bdOpts }); }
+    }
   </script>
 </body>
 </html>
