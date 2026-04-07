@@ -159,6 +159,10 @@ app.get("/api/pricing-lookup", (_req, res) => {
   }
 });
 
+// --- Page redirects (allow URLs without .html extension) ---
+app.get("/breakeven", (_req, res) => res.redirect("/breakeven.html"));
+app.get("/internal", (_req, res) => res.redirect("/internal.html"));
+
 // --- Startup ---
 
 async function start() {
